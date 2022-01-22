@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Movies.Dtos;
+using Movies.HelperClasses.Extensions;
 using Movies.Services.Films;
 
 namespace Movies.Pages
@@ -17,6 +18,17 @@ namespace Movies.Pages
         private FilmDto _filmToDelete = new();
         private IJSObjectReference _module;
         private List<FilmDto> _films = new();
+        private List<FilmDto> _filmsToShow
+        {
+            get
+            {
+                var list = _films
+                    .Where(f => f.ParentId == null)
+                    .ToList();
+
+                return list;
+            }
+        }
 
         protected override async Task OnInitializedAsync()
         {
@@ -33,13 +45,52 @@ namespace Movies.Pages
             }
         }
 
+        bool HasChildren(FilmDto film)
+        {
+            var hasChildren = _films.Any(f => f.ParentId == film.Id);
+
+            return hasChildren;
+        }
+
+        List<FilmDto> GetChildren(FilmDto film)
+        {
+            var children = _films
+                .Where(f => f.ParentId == film.Id)
+                .ToList();
+
+            return children;
+        }
+
+        void ChangeShowChildren(FilmDto film)
+        {
+            film.ShowChildren = !film.ShowChildren;
+        }
+
+        List<FilmDto> GetParentFilms()
+        {
+            var films = _films
+                .Where(f => f.ParentId == null && f.Id != _filmToSave.Id)
+                .ToList();
+            return films;
+        }
+
+        void ParentFilmChanged(ChangeEventArgs args)
+        {
+            var val = args.Value.ToString();
+
+            if (string.IsNullOrEmpty(val))
+            {
+                _filmToSave.ParentId = null;
+                return;
+            }
+
+            var guid = Guid.Parse(val);
+            _filmToSave.ParentId = guid;
+        }
+
         async Task SetFilms()
         {
-            _films = (await FilmsService.GetFilmsAsync(new HelperClasses.PaginationParameters
-            {
-                Page = 1,
-                PageSize = 99999
-            })).Items;
+            _films = await FilmsService.GetAllFilmsAsync();
         }
 
         async Task SaveFilm()
@@ -61,7 +112,7 @@ namespace Movies.Pages
 
         async Task EditClicked(FilmDto film)
         {
-            _filmToSave = film;
+            _filmToSave = film.Copy();
             await _module.InvokeAsync<string>("showModalWithId", "saveFilmModal");
         }
 

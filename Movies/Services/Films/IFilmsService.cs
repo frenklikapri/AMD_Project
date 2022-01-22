@@ -8,5 +8,6 @@ namespace Movies.Services.Films
         Task<PaginatedListResult<FilmDto>> GetFilmsAsync(PaginationParameters paginationParameters);
         Task<FilmDto> SaveFilmAsync(FilmDto filmDto);
         Task<bool> DeleteFilmAsync(Guid id);
+        Task<List<FilmDto>> GetAllFilmsAsync();
     }
 }

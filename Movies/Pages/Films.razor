@@ -17,16 +17,30 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (var film in _films)
+        @foreach (var film in _filmsToShow)
         {
             <tr>
-                <td>
-                    @film.Title
+                <td class="align-middle">
+                    @if (HasChildren(film))
+                    {
+                        <i class="fas fa fa-caret-@(film.ShowChildren ? "down" : "right") me-2 font-24 cursor-pointer"
+                   @onclick="(() => ChangeShowChildren(film))"></i>
+
+                        <span class="cursor-pointer" @onclick="(() => ChangeShowChildren(film))">
+                            @film.Title
+                        </span>
+                    }
+                    else
+                    {
+                        <span>
+                            @film.Title
+                        </span>
+                    }
                 </td>
-                <td>
+                <td class="align-middle">
                     @film.ReleaseDate.ToShortDateString()
                 </td>
-                <td class="text-end">
+                <td class="align-middle text-end">
                     <button class="btn btn-outline-secondary" @onclick="(() => EditClicked(film))"
                         title="Edit Film">
                         <i class="fas fa-edit" />
@@ -37,6 +51,33 @@
                     </button>
                 </td>
             </tr>
+
+            @if (film.ShowChildren)
+            {
+                foreach (var child in GetChildren(film))
+                {
+                    <tr>
+                        <td class="align-middle ps-5">
+                            <span>
+                                @child.Title
+                            </span>
+                        </td>
+                        <td class="align-middle">
+                            @child.ReleaseDate.ToShortDateString()
+                        </td>
+                        <td class="align-middle text-end">
+                            <button class="btn btn-outline-secondary" @onclick="(() => EditClicked(child))"
+                        title="Edit Film">
+                                <i class="fas fa-edit" />
+                            </button>
+                            <button class="btn btn-danger" @onclick="(() => DeleteClicked(child))"
+                        title="Edit Film">
+                                <i class="fas fa-trash" />
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
         }
     </tbody>
 </table>
@@ -60,6 +101,23 @@
                         <label for="releaseDate" class="form-label">ReleaseDate</label>
                         <InputDate class="form-control" id="releaseDate" @bind-Value="_filmToSave.ReleaseDate" />
                         <ValidationMessage For="() => _filmToSave.ReleaseDate" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="parentId">Parent Film</label>
+                        <select class="form-control" @onchange="ParentFilmChanged">
+                            <option value="">Select parent film...</option>
+                            @foreach (var film in GetParentFilms())
+                            {
+                                if (_filmToSave.ParentId == film.Id)
+                                {
+                                    <option value="@film.Id" selected>@film.Title</option>
+                                }
+                                else
+                                {
+                                    <option value="@film.Id">@film.Title</option>
+                                }
+                            }
+                        </select>
                     </div>
                 </EditForm>
             </div>
