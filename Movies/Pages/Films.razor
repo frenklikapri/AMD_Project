@@ -31,6 +31,10 @@
                         title="Edit Film">
                         <i class="fas fa-edit" />
                     </button>
+                    <button class="btn btn-danger" @onclick="(() => DeleteClicked(film))"
+                        title="Edit Film">
+                        <i class="fas fa-trash" />
+                    </button>
                 </td>
             </tr>
         }
@@ -67,6 +71,20 @@
     </div>
 </div>
 
-@code {
-
-}
+<div class="modal fade" id="deleteFilmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Film</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete film '@(_filmToDelete?.Title)'?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                <button type="button" class="btn alert-danger" @onclick="DeleteApproved">Yes</button>
+            </div>
+        </div>
+    </div>
+</div>

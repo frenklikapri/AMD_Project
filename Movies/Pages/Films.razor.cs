@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Movies.Dtos;
+using Movies.Services.Films;
 
 namespace Movies.Pages
 {
@@ -9,17 +10,17 @@ namespace Movies.Pages
         [Inject]
         public IJSRuntime JS { get; set; }
 
+        [Inject]
+        public IFilmsService FilmsService { get; set; }
+
         private FilmDto _filmToSave = new();
+        private FilmDto _filmToDelete = new();
         private IJSObjectReference _module;
         private List<FilmDto> _films = new();
 
         protected override async Task OnInitializedAsync()
         {
-            _films = new List<FilmDto>
-            {
-                new FilmDto(Guid.NewGuid(), "The Battle at Lake Changjin", new DateOnly(2021, 9, 21)),
-                new FilmDto(Guid.NewGuid(), "No Time to Die", new DateOnly(2021, 9, 28))
-            };
+            await SetFilms();
             await base.OnInitializedAsync();
         }
 
@@ -32,15 +33,42 @@ namespace Movies.Pages
             }
         }
 
+        async Task SetFilms()
+        {
+            _films = (await FilmsService.GetFilmsAsync(new HelperClasses.PaginationParameters
+            {
+                Page = 1,
+                PageSize = 99999
+            })).Items;
+        }
+
         async Task SaveFilm()
         {
+            var film = await FilmsService.SaveFilmAsync(_filmToSave);
+            _films = _films
+                .Where(f => f.Id != film.Id)
+                .ToList();
+            await SetFilms();
             await _module.InvokeAsync<string>("hideModalWithId", "saveFilmModal");
+        }
+
+        async Task DeleteApproved()
+        {
+            var success = await FilmsService.DeleteFilmAsync(_filmToDelete.Id);
+            await SetFilms();
+            await _module.InvokeAsync<string>("hideModalWithId", "deleteFilmModal");
         }
 
         async Task EditClicked(FilmDto film)
         {
             _filmToSave = film;
             await _module.InvokeAsync<string>("showModalWithId", "saveFilmModal");
+        }
+
+        async Task DeleteClicked(FilmDto film)
+        {
+            _filmToDelete = film;
+            await _module.InvokeAsync<string>("showModalWithId", "deleteFilmModal");
         }
 
         async Task AddClicked()
