@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Movies.Data;
 using Movies.Services.Films;
+using Movies.Services.Persons;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddSingleton<IFilmsService, DummyFilmsService>();
+builder.Services.AddSingleton<IPersonsService, DummyPersonsService>();
 
 var app = builder.Build();
 

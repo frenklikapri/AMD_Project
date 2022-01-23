@@ -1,7 +1,116 @@
 ﻿@page "/persons"
 
-<h3>Persons</h3>
+<PageHeader Title="Manage Persons">
+    <RightContent>
+        <button class="btn btn-primary" @onclick="AddClicked">
+            <i class="fas fa-plus" />
+        </button>
+    </RightContent>
+</PageHeader>
 
-@code {
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Birthday</th>
+            <th>Sex</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var person in _persons)
+        {
+            <tr>
+                <td class="align-middle">
+                    @person.Name
+                </td>
+                <td class="align-middle">
+                    @person.Birthday.ToShortDateString()
+                </td>
+                <td class="align-middle">
+                    @person.Sex
+                </td>
+                <td class="align-middle text-end">
+                    <button class="btn btn-outline-secondary" @onclick="(() => EditClicked(person))"
+                        title="Edit Person">
+                        <i class="fas fa-edit" />
+                    </button>
+                    <button class="btn btn-danger" @onclick="(() => DeleteClicked(person))"
+                        title="Edit Person">
+                        <i class="fas fa-trash" />
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
 
-}
+<div class="modal fade" id="savePersonModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Save Person</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="@_personToSave" OnValidSubmit="SavePerson" id="savePersonFrm">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name</label>
+                        <InputText class="form-control" id="name" @bind-Value="_personToSave.Name" />
+                        <ValidationMessage For="() => _personToSave.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="birthday" class="form-label">Birthday</label>
+                        <InputDate class="form-control" id="birthday" @bind-Value="_personToSave.Birthday" />
+                        <ValidationMessage For="() => _personToSave.Birthday" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="sex">Sex</label>
+                        <select class="form-control" @onchange="SexChanged" id="sex">
+                            <option value="">Select gender...</option>
+                            @if (_personToSave.Sex == "M")
+                            {
+                                <option value="F">Female</option>
+                                <option value="M" selected>Male</option>
+                            }
+                            else if(_personToSave.Sex == "F")
+                            {
+                                <option value="F" selected>Female</option>
+                                <option value="M">Male</option>
+                            }
+                            else
+                            {                                
+                                <option value="F">Female</option>
+                                <option value="M">Male</option>
+                            }
+                        </select>
+                        <ValidationMessage For="() => _personToSave.Sex" />
+                    </div>
+                </EditForm>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary" form="savePersonFrm">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deletePersonModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Person</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete person '@(_personToDelete?.Name)'?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                <button type="button" class="btn alert-danger" @onclick="DeleteApproved">Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
