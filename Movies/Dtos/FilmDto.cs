@@ -9,27 +9,39 @@ namespace Movies.Dtos
 
         }
 
-        public FilmDto(Guid id, string title, DateOnly releaseDate, Guid? parentId = null)
+        public FilmDto(int id, string title, DateTime releaseDate, string filmPic, int? parentId = null)
         {
             Id = id;
             Title = title;
             ReleaseDate = releaseDate;
             ParentId = parentId;
+            FilmPic = filmPic;
         }
 
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         public string Title { get; set; }
 
         [Required]
-        public DateOnly ReleaseDate { get; set; }
+        public DateTime ReleaseDate { get; set; }
 
-        public Guid? ParentId { get; set; }
+        public int? ParentId { get; set; }
+
+        public bool HasChildren { get; set; }
 
         /// <summary>
-        /// This is used in html table to show children
+        /// Used to show the subordinated films
         /// </summary>
         public bool ShowChildren { get; set; }
+
+        public string FilmPic { get; set; }
+
+        /// <summary>
+        /// This is used only to show
+        /// </summary>
+        public string Genres { get; set; }
+
+        public int[] GenresToSave { get; set; }
     }
 }

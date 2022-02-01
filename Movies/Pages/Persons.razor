@@ -1,6 +1,6 @@
 ﻿@page "/persons"
 
-<PageHeader Title="Manage Persons">
+<PageHeader Title="Manage Film Persons">
     <RightContent>
         <button class="btn btn-primary" @onclick="AddClicked">
             <i class="fas fa-plus" />
@@ -8,42 +8,45 @@
     </RightContent>
 </PageHeader>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Birthday</th>
-            <th>Sex</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var person in _persons)
-        {
-            <tr>
-                <td class="align-middle">
-                    @person.Name
-                </td>
-                <td class="align-middle">
-                    @person.Birthday.ToShortDateString()
-                </td>
-                <td class="align-middle">
-                    @person.Sex
-                </td>
-                <td class="align-middle text-end">
-                    <button class="btn btn-outline-secondary" @onclick="(() => EditClicked(person))"
-                        title="Edit Person">
-                        <i class="fas fa-edit" />
-                    </button>
-                    <button class="btn btn-danger" @onclick="(() => DeleteClicked(person))"
-                        title="Edit Person">
-                        <i class="fas fa-trash" />
-                    </button>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="row">
+    @foreach (var person in _persons)
+    {
+        <div class="card m-2 col-4 p-0" style="width: 18rem;">
+            @if (string.IsNullOrWhiteSpace(person.ProfilePic))
+            {
+                if (person.Sex == "F")
+                {
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Crystal_Clear_kdm_user_female.svg/1200px-Crystal_Clear_kdm_user_female.svg.png" class="card-img-top" alt="...">
+                }
+                else
+                {
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/User_icon_2.svg/2048px-User_icon_2.svg.png" class="card-img-top" alt="...">
+                }
+            }
+            else
+            {
+                <img src="@person.ProfilePic" class="card-img-top" alt="...">
+            }
+            <div class="card-body">
+                <h5 class="card-title" style="height:60px;">@person.Name (@person.Sex) - @(person.Birthday.ToShortDateString())</h5>
+                <div class="row">
+                    <div class="col-6">
+                        <button class="btn btn-outline-secondary btn-block w-100" @onclick="(() => EditClicked(person))"
+                            title="Edit Person">
+                            Edit
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-danger btn-block w-100" @onclick="(() => DeleteClicked(person))"
+                            title="Delete Person">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 <div class="modal fade" id="savePersonModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -74,18 +77,22 @@
                                 <option value="F">Female</option>
                                 <option value="M" selected>Male</option>
                             }
-                            else if(_personToSave.Sex == "F")
+                            else if (_personToSave.Sex == "F")
                             {
                                 <option value="F" selected>Female</option>
                                 <option value="M">Male</option>
                             }
                             else
-                            {                                
+                            {
                                 <option value="F">Female</option>
                                 <option value="M">Male</option>
                             }
                         </select>
                         <ValidationMessage For="() => _personToSave.Sex" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="ProfilePic" class="form-label">Profile Photo</label>
+                        <InputText class="form-control" id="ProfilePic" @bind-Value="_personToSave.ProfilePic" />
                     </div>
                 </EditForm>
             </div>

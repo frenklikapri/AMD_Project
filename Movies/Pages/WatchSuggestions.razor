@@ -1,0 +1,27 @@
+﻿@page "/watch-suggestions"
+
+<PageHeader Title="Watch Suggestions">
+    <RightContent>
+        <div>
+            <select class="form-control" @onchange="UserChanged">
+                <option value="0">Select a user...</option>
+                @foreach (var user in _users)
+                {
+                    <option value="@user.UserId">@user.Username</option>
+                }
+            </select>
+        </div>
+    </RightContent>
+</PageHeader>
+
+<div class="row">
+    @foreach (var film in _films)
+    {
+        <div class="card m-2 col-4 p-0" style="width: 18rem;">
+            <img src="@film.FilmPic" class="card-img-top" alt="...">
+            <div class="card-body">
+                <h5 class="card-title" style="height:60px;">@film.Title (@film.Genres) - @(film.ReleaseDate.ToShortDateString())</h5>
+            </div>
+        </div>
+    }
+</div>

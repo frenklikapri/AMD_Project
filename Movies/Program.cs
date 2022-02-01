@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Movies.Data;
 using Movies.Services.Films;
 using Movies.Services.Persons;
+using Movies.Services.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,8 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddSingleton<WeatherForecastService>();
-builder.Services.AddSingleton<IFilmsService, DummyFilmsService>();
-builder.Services.AddSingleton<IPersonsService, DummyPersonsService>();
+builder.Services.AddSingleton<IFilmsService, FilmsServiceWithDapper>();
+builder.Services.AddSingleton<IPersonsService, PersonsServiceWithDapper>();
+builder.Services.AddSingleton<IUsersService, UsersServiceWithDapper>();
 
 var app = builder.Build();
 

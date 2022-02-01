@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using NpgsqlTypes;
+using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace Movies.Dtos
 {
@@ -9,15 +11,16 @@ namespace Movies.Dtos
 
         }
 
-        public PersonDto(Guid id, string name, string sex, DateOnly birthday)
+        public PersonDto(int id, string name, string sex, DateTime birthday, string profilePic)
         {
             Id = id;
             Name = name;
             Sex = sex;
             Birthday = birthday;
+            ProfilePic = profilePic;
         }
 
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         public string Name { get; set; }
@@ -26,6 +29,8 @@ namespace Movies.Dtos
         public string Sex { get; set; }
 
         [Required]
-        public DateOnly Birthday { get; set; }
+        public DateTime Birthday { get; set; }
+
+        public string ProfilePic { get; set; }
     }
 }

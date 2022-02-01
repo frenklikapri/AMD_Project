@@ -4,8 +4,8 @@ namespace Movies.Services.Persons
 {
     public interface IPersonsService
     {
-        Task<PersonDto> SavePersonAsync(PersonDto person);
-        Task<bool> DeletePersonAsync(Guid id);
+        Task<string> SavePersonAsync(PersonDto person);
+        Task<string> DeletePersonAsync(int id);
         Task<List<PersonDto>> GetAllPersonsAsync();
     }
 }

@@ -1,7 +1,95 @@
 ﻿@page "/ratings"
 
-<h3>UserRatings</h3>
+<PageHeader Title="User Ratings">
+    <RightContent>
+        <div class="d-flex">
+            <label style="width:150px;line-height:40px; margin-right: 6px;" for="yourRatings">
+                Your ratings
+                <input type="checkbox" id="yourRatings" @bind="YourRatings" />
+            </label>
+            <select class="form-control" @onchange="UserChanged">
+                <option value="0">Select a user...</option>
+                @foreach (var user in _users)
+                {
+                    <option value="@user.UserId">@user.Username</option>
+                }
+            </select>
+        </div>
+    </RightContent>
+</PageHeader>
 
-@code {
 
-}
+<div class="row">
+    @if (_yourRatings)
+    {
+        foreach (var rating in _ratings)
+        {
+            <div class="card m-2 col-4 p-0" style="width: 18rem;">
+                <img src="@rating.FilmPic" class="card-img-top" alt="...">
+                <div class="card-body">
+                    <h5 class="card-title" style="height:60px;">@rating.Title @(rating.Genres) - @(rating.ReleaseDate.ToShortDateString())</h5>
+                    <span style="position: absolute; top: 0; right: -1px; border-radius: 2px; background: rgba(104, 103, 103, .5)">
+                        @if (rating.HoverRating > 0)
+                        {
+                            for (int i = 1; i < 6; i++)
+                            {
+                                {
+                                    var index = i;
+                                    <i class="@(rating.HoverRating >= i ? "fas" :"far") fa-star" style="color: #FDCC0D;"
+                   @onmouseover="(() => RatingMouseOver(rating, index))"
+                   @onmouseout="(() => RatingMouseOver(rating, 0))"
+                   @onclick="(() => UpdateRating(rating, index))"></i>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            for (int i = 1; i < 6; i++)
+                            {
+                                {
+                                    var index = i;
+                                    <i class="@(rating.Rating >= i ? "fas" :"far") fa-star" style="color: #FDCC0D;"
+                   @onmouseover="(() => RatingMouseOver(rating, index))"
+                   @onmouseout="(() => RatingMouseOver(rating, 0))"
+                   @onclick="(() => UpdateRating(rating, index))"></i>
+                                }
+                            }
+                        }
+                    </span>
+                    <div class="row">
+                        <div class="col-12">
+                            <button class="btn btn-danger btn-block w-100" @onclick="(() => RemoveRating(rating))"
+                            title="Delete Person">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        foreach (var film in _filmsToRate)
+        {
+            <div class="card m-2 col-4 p-0" style="width: 18rem;">
+                <img src="@film.FilmPic" class="card-img-top" alt="...">
+                <div class="card-body">
+                    <h5 class="card-title" style="height:60px;">@film.Title (@film.Genres) - @(film.ReleaseDate.ToShortDateString())</h5>
+                    <span style="position: absolute; top: 0; right: -1px; border-radius: 2px; background: rgba(104, 103, 103, .5)">
+                        @for (int i = 1; i < 6; i++)
+                        {
+                            {
+                                var index = i;
+                                <i class="@(film.Rating >= i ? "fas" :"far") fa-star" style="color: #FDCC0D;"
+                                   @onmouseover="(() => RatingMouseOver(film, index))"
+                                   @onmouseout="(() => RatingMouseOver(film, 0))"
+                                   @onclick="(() => UpdateRating(film, index))"></i>
+                            }
+                        }
+                    </span>
+                </div>
+            </div>
+        }
+    }
+</div>
