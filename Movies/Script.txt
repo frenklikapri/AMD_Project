@@ -1,0 +1,724 @@
+
+create table if not exists FilmRoles (
+	filmRoleId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	name varchar(50) not null
+);
+
+create table if not exists FilmPersons (
+	filmPersonId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	fullName varchar(50) not null,
+	birthday date not null,
+	sex char(1) not null,
+	profilePic text,
+	CHECK (birthday < CURRENT_DATE)
+);
+
+create table if not exists Films (
+	filmId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	title varchar(100) not null,
+	releaseDate date not null,
+	minAgeOfAudience int,
+	parentId int,
+	filmPic text,
+	CHECK (releaseDate <= CURRENT_DATE),
+   CONSTRAINT fk_films_films
+      FOREIGN KEY(parentId) 
+	  REFERENCES Films(filmId)
+	  ON DELETE CASCADE
+);
+
+create table if not exists FilmRelatedPersons(
+	filmRelatedPersonId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	filmId int not null,
+	filmRoleId int not null,
+	filmPersonId int not null,
+   CONSTRAINT fk_filmrp_film
+      FOREIGN KEY(filmId) 
+	  REFERENCES Films(filmId)
+	  ON DELETE CASCADE,
+   CONSTRAINT fk_filmrp_role
+      FOREIGN KEY(filmRoleId) 
+	  REFERENCES FilmRoles(filmRoleId)
+	  ON DELETE CASCADE,
+   CONSTRAINT fk_filmrp_persons
+      FOREIGN KEY(filmPersonId) 
+	  REFERENCES FilmPersons(filmPersonID)
+	  ON DELETE CASCADE
+);
+
+create table if not exists Genres(
+	genreId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	name varchar(50) not null
+);
+
+create table if not exists FilmGenres(
+	filmGenreId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	filmId int not null,
+	genreId int not null,
+   CONSTRAINT fk_filmgenres_film
+      FOREIGN KEY(filmId) 
+	  REFERENCES Films(filmId)
+	  ON DELETE CASCADE,
+   CONSTRAINT fk_filmgenres_genre
+      FOREIGN KEY(genreId) 
+	  REFERENCES Genres(genreId)
+	  ON DELETE CASCADE
+);
+
+create table if not exists Users(
+	userId INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	username varchar(100)
+);
+
+create table if not exists FilmUserRatings(
+	filmUserRatings INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	userId int not null,
+	filmId int not null,
+	rating int not null,
+   CONSTRAINT fk_userratings_users
+      FOREIGN KEY(userId) 
+	  REFERENCES Users(userId)
+	  ON DELETE CASCADE,
+   CONSTRAINT fk_userratings_films
+      FOREIGN KEY(filmId) 
+	  REFERENCES Films(filmId)
+	  ON DELETE CASCADE,
+	CHECK (rating > 0 AND rating < 6)
+);
+
+create or replace function SaveFilmPerson(filmPersonId int,
+										 fullname varchar(100),
+										 birthday date,
+										 sex varchar(1),
+										 profilePic text)
+										 returns text as
+$$
+begin
+if $1 > 0 then
+
+update filmpersons set fullname = $2,
+birthday = $3, sex = $4, profilePic = $5
+where filmpersons.filmpersonid = $1;
+
+else
+
+insert into filmpersons (fullname, birthday, sex, profilePic)
+values ($2, $3, $4, $5);
+
+end if;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+
+
+create or replace function DeleteFilmPerson(id int) returns text 
+as
+$$
+begin
+if not exists(select * from filmpersons where filmpersonid = id) then
+raise exception 'A person with this id doesn''t exist';
+end if;
+delete from filmpersons where filmpersonid = id;
+return '';
+end;
+$$ language plpgsql;
+
+create or replace function GetFilmPersons() returns
+table(id int, name varchar(50), birthday date, sex char(1), profilePic text) as
+$$
+begin
+return query select
+fp.filmpersonid as id, fp.fullname as name, fp.birthday, fp.sex, fp.profilePic
+from filmpersons fp
+order by fp.fullname;
+end;
+$$ language plpgsql;
+
+create or replace function GetAllFilms() returns 
+table(id int, title varchar(50), releaseDate date,
+	 minAgeOfAudience int, filmPic text, hasChildren bool,
+	  genres text) as
+$$
+begin
+
+return query
+select f.filmId as id, f.title, f.releaseDate, f.minAgeOfAudience
+,f.filmPic
+, case when (select count(*) from films f2 where f2.parentId = f.filmId) > 0 then True else False end as hasChildren
+, (select string_agg(g.name::text, ',') as genres from filmgenres fg
+inner join genres g on fg.genreid = g.genreid
+where fg.filmid = f.filmid)
+from films f
+where f.parentId is null
+order by f.title
+;
+
+end;
+$$ language plpgsql;
+
+create or replace function GetWatchSuggestions(userId int) returns 
+table(id int, title varchar(50), releaseDate date,
+	 minAgeOfAudience int, filmPic text, hasChildren bool,
+	  genres text) as
+$$
+begin
+
+return query
+select distinct f.filmId as id, f.title, f.releaseDate, f.minAgeOfAudience
+,f.filmPic
+, case when (select count(*) from films f2 where f2.parentId = f.filmId) > 0 then True else False end as hasChildren
+, (select string_agg(g.name::text, ',') as genres from filmgenres fg
+inner join genres g on fg.genreid = g.genreid
+where fg.filmid = f.filmid)
+from films f
+inner join filmgenres fg on f.filmid = fg.filmid
+where fg.genreid in (
+	select distinct fg1.genreid from filmuserratings fur 
+	inner join films f1 on fur.filmid = f1.filmid
+	inner join filmgenres fg1 on f1.filmid = fg1.filmid
+	where fur.userid = $1
+)
+and f.filmid not in (select fur1.filmid from filmuserratings fur1 where fur1.userid = $1)
+order by f.title
+;
+
+end;
+$$ language plpgsql;
+
+
+
+create or replace function GetChildrenFilms(idParam int) returns 
+table(id int, title varchar(50), releaseDate date,
+	 minAgeOfAudience int, filmPic text, parentId int,
+	  genres text) as
+$$
+begin
+
+return query
+select f.filmId as id, f.title, f.releaseDate, f.minAgeOfAudience
+,f.filmPic
+, f.parentId
+, (select string_agg(g.name::text, ',') as genres from filmgenres fg
+inner join genres g on fg.genreid = g.genreid
+where fg.filmid = f.filmid)
+from films f
+where f.parentId = idParam
+order by f.title
+;
+
+end;
+$$ language plpgsql;
+
+create or replace function GetAllGenres() returns
+table(genreId int, name varchar(50)) as
+$$
+begin
+return query
+select * from genres;
+end;
+$$ language plpgsql;
+
+create or replace function DeleteFilm(id int) returns text
+as
+$$
+begin
+
+if not exists(select * from films where filmId = id) then
+raise exception 'No film exists with this id';
+end if;
+
+delete from films where filmId = id;
+
+return '';
+end;
+$$ language plpgsql;
+
+
+create or replace function SaveFilm(id int, title varchar(50),
+								   releaseDate date,
+								   filmPic text,
+								   parentId int,
+								   genresToSave int[])
+								   returns text
+as 
+$$
+declare
+	addedId int;
+begin
+
+if id < 1 then
+insert into films (title, releasedate, filmpic, parentid)
+values ($2, $3, $4, case when $5 > 0 then $5 else null end)
+ returning filmId into addedId;
+else
+update films set title = $2, releaseDate = $3, filmpic = $4,
+parentId = case when $5 > 0 then $5 else null end
+where filmId = id;
+addedId = id;
+end if;
+
+delete from filmgenres where filmid = addedId;
+
+FOR i IN 1 .. array_upper(genresToSave, 1)
+   LOOP
+      insert into filmgenres (filmid, genreid) values (addedId, genresToSave[i]);
+   END LOOP;
+return '';
+end;
+$$ language plpgsql;
+
+create or replace function GetFilmGenres(filmIdParam int)
+returns table(filmId int)
+as
+$$
+begin
+return query
+select genreid as filmId from filmgenres fg where fg.filmid = $1;
+end;
+$$ language plpgsql;
+
+create or replace function GetFilmRelatedPersons(filmId int)
+returns table (filmRelatedPersonId int,
+			   filmPersonId int,
+			  name varchar(50),
+			  sex char(1),
+			  birthday date,
+			  profilePic text,
+			  role varchar(50))
+as
+$$
+begin
+return query
+select frp.filmrelatedpersonid, fp.filmpersonid, fp.fullname as name,
+fp.sex, fp.birthday, fp.profilePic, fr.name as role
+from filmrelatedpersons frp
+inner join filmpersons fp on frp.filmpersonid = fp.filmpersonid
+inner join filmroles fr on frp.filmroleid = fr.filmroleid
+where frp.filmid = $1;
+end;
+$$ language plpgsql;
+
+create or replace function GetAllFilmRoles()
+returns table (id int, name varchar(50))
+as
+$$
+begin
+return query
+select filmroleid as id, filmroles.name from filmroles;
+end;
+$$ language plpgsql;
+
+create or replace function GetFilmsToRate(userId int)
+returns table (filmId int, title varchar(50), filmPic text, genres text, releaseDate date)
+as
+$$
+begin
+return query
+select f.filmid, f.title, f.filmpic
+, (select string_agg(g.name::text, ',') as genres from filmgenres fg
+inner join genres g on fg.genreid = g.genreid
+where fg.filmid = f.filmid)
+, f.releasedate 
+   from films f 
+where f.filmid 
+	not in (select fur.filmid from filmuserratings fur where fur.userId = $1);
+end;
+$$ language plpgsql;
+
+create or replace function RemoveRelatedPerson(filmRelatedPersonId int)
+returns text as
+$$
+begin
+if not exists(select * from filmrelatedpersons where filmrelatedpersons.filmrelatedpersonid = $1) then
+raise notice 'No film related person exists with this id';
+end if;
+
+delete from filmrelatedpersons where filmrelatedpersons.filmrelatedpersonid = $1;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+create or replace function AddFilmRelatedPerson(filmPersonId int,
+											   filmRoleId int,
+											   filmId int)
+returns text as
+$$
+begin
+
+if exists(select * from filmrelatedpersons frp where frp.filmpersonid = $1
+		 and frp.filmroleid = $2 and frp.filmid = $3) then
+raise exception 'This person exists with this role in this film!'; 
+end if;
+
+insert into filmrelatedpersons (filmId, filmroleid, filmpersonid)
+values ($3, $2, $1);
+
+return '';
+
+end;
+$$ language plpgsql;
+
+create or replace function GetAllUsers()
+returns table(userId int, username varchar(50)) as
+$$
+begin
+return query
+select * from users;
+end;
+$$ language plpgsql;
+
+create or replace function GetUserRatings(userId int)
+returns table(filmUserRatingId int,
+			 title varchar(50),
+			 filmPic text,
+			 genres text,
+			 releaseDate date,
+			 rating int) as
+$$
+begin
+return query
+select fur.filmuserratings as filmUserRatingId, f.title, f.filmpic
+, (select string_agg(g.name::text, ',') as genres from filmgenres fg
+inner join genres g on fg.genreid = g.genreid
+where fg.filmid = f.filmid)
+, f.releaseDate
+, fur.rating from filmuserratings fur
+inner join films f on f.filmid = fur.filmid
+where fur.userid = $1;
+end;
+$$ language plpgsql;
+
+create or replace function RemoveRating(id int) returns text
+as 
+$$
+begin
+if not exists(select * from filmuserratings where filmuserratings = $1) then
+raise exception 'This film user ratings doesn''t exist';
+end if;
+
+delete from filmuserratings where filmuserratings = $1;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+create or replace function AddRating(filmId int, userId int, rating int) 
+returns text
+as 
+$$
+begin
+if not exists(select * from films f where f.filmid = $1) then
+	raise exception 'This film doesn''t exist';
+elseif not exists(select * from users u where u.userid = $2) then
+	raise exception 'This user doesn''t exist';
+elseif exists(select * From filmuserratings fur where fur.filmid = $1 and fur.userid = $2) then
+	raise exception 'You can''t rate the same films twice';
+else
+	insert into filmuserratings (filmid, userid, rating) values
+	($1, $2, $3);
+end if;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+create or replace function UpdateRating(filmRatingId int, rating int) 
+returns text
+as 
+$$
+begin
+if not exists(select * from filmuserratings f where f.filmuserratings = $1) then
+	raise exception 'This rating doesn''t exist';
+else
+	update filmuserratings set rating = $2 where filmuserratings = $1;
+end if;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+create or replace function AddRating(filmId int, userId int, rating int) 
+returns text
+as 
+$$
+begin
+if not exists(select * from films f where f.filmid = $1) then
+	raise exception 'This film doesn''t exist';
+elseif not exists(select * from users u where u.userid = $2) then
+	raise exception 'This user doesn''t exist';
+else
+	insert into filmuserratings (filmid, userid, rating)
+	values ($1, $2, $3);
+end if;
+
+return '';
+
+end;
+$$ language plpgsql;
+
+
+do $$ 
+<<insert_block>>
+declare
+	actionId integer;
+	familyMovies integer;
+	comedies integer;
+	crime integer;
+	history integer;
+	dramas integer;
+	german integer;
+	horror integer;
+	thriller integer;
+	mysteries integer;
+	romance integer;
+	kids integer;
+	entertainment integer;
+begin
+
+if (not exists(select name from Genres where name = 'Action') )
+then
+Insert into genres(name) values ('Action') 
+,('FamilyMovies')
+,('Comedies')
+,('Crime')
+,('History')
+,('Dramas')
+,('German')
+,('Horror')
+,('Thriller')
+,('Mysteries')
+,('Romance')
+,('Kids')
+,('Entertainment');
+
+end if;
+
+select genreId from genres into actionId where name='Action';
+select genreId from genres into familyMovies where name='FamilyMovies';
+select genreId from genres into comedies where name='Comedies';
+select genreId from genres into crime where name='Crime';
+select genreId from genres into history where name='History';
+select genreId from genres into german where name='German';
+select genreId from genres into dramas where name='Dramas';
+select genreId from genres into horror where name='Horror';
+select genreId from genres into thriller where name='Thriller';
+select genreId from genres into mysteries where name='Mysteries';
+select genreId from genres into romance where name='Romance';
+select genreId from genres into kids where name='Kids';
+select genreId from genres into entertainment where name='Entertainment';
+
+if (not exists(select name from filmroles where name = 'Actor'))
+then
+insert into filmroles (name) values ('Actor'), ('Art Directors')
+, ('Teleprompter Operator'), ('Transportation Driver')
+, ('Video Assist Operator'), ('Videographer'), ('Wardrobe Stylist')
+, ('Writer'), ('Screenplay') , ('Story');
+end if;
+
+if (not exists(select * from users))
+then
+Insert into Users(username) values('camila_smith')
+,('anna_sterk')
+,('zack_newton')
+,('frank_chesk')
+,('tom_muller')
+,('albert_ludwig')
+,('petter_son');
+end if;
+
+if (not exists(select * from filmpersons))
+then
+Insert into FilmPersons ( fullName, birthday, sex, profilePic) 
+values('Aaron Echart','09-15-1989','M','https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Aaron_Eckhart_by_Gage_Skidmore.jpg/800px-Aaron_Eckhart_by_Gage_Skidmore.jpg') 
+,('Sam Claflin','09-26-1967','M','https://upload.wikimedia.org/wikipedia/commons/8/82/Sam_Claflin_2014.jpg')
+,('Edgar Ramiez','06-12-1978','M','https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Edgar_Ramirez_by_Gage_Skidmore.jpg/640px-Edgar_Ramirez_by_Gage_Skidmore.jpg')
+,('Edgar Wright','04-22-1989','M','https://images.mubicdn.net/images/cast_member/19632/cache-2303-1600882269/image-w856.jpg?size=800x')
+,('Vera Farmiga','03-17-1989','F','https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Vera_Farmiga_%2843676389342%29.jpg/800px-Vera_Farmiga_%2843676389342%29.jpg')
+,('Charles Dance','02-15-1983','F','https://upload.wikimedia.org/wikipedia/commons/1/12/Charles_Dance_2012_%28cropped%29.jpg')
+,('Jasmin Gerat','06-19-1988', 'M','https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Jasmin-Gerat-2014.jpg/640px-Jasmin-Gerat-2014.jpg') 
+,('Sandra Bullock','07-28-1979','M','https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Sandra_Bullock_in_July_2013.jpg/640px-Sandra_Bullock_in_July_2013.jpg')
+,('Christian Bale','4-17-1986','M','https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Christian_Bale-7834.jpg/800px-Christian_Bale-7834.jpg')
+,('Heath Ledger','07-30-1991','M','https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Heath_Ledger_%282%29.jpg/800px-Heath_Ledger_%282%29.jpg')
+,('Michael Caine','10-01-1993','M','https://image.gala.de/22400568/t/lb/v2/w1440/r1/-/michael-caine.jpg')
+,('Gery Oldman','11-05-1994','M','https://upload.wikimedia.org/wikipedia/commons/8/89/Gary_Oldman_Cannes_2018.jpg')  	 --1 
+,('Miguel Arteta','09-07-1989','M','https://remezcla.com/wp-content/uploads/2021/03/header-miguel-arteta-.jpg')           --7                     
+,('Justin Malen','12-15-1992','M','https://resizing.flixster.com/ZdWh1xubTNrrqY0QNLeQtpdzozM=/218x280/v2/https://flxt.tmsimg.com/assets/760264_v9_ba.jpg') 	--7
+,('Ansel Elgort','03-14-1994','M','https://pyxis.nymag.com/v1/imgs/d83/506/dca28350d6b2720076b3cfb03fc83d43ca-ansel-elgort-west-side-story.rvertical.w1200.jpg') 	--7
+,('Kenau Reeves','11-22-1988','F','https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Reuni%C3%A3o_com_o_ator_norte-americano_Keanu_Reeves_%28cropped%29.jpg/1200px-Reuni%C3%A3o_com_o_ator_norte-americano_Keanu_Reeves_%28cropped%29.jpg')      	  --8
+,('Michael Nyqvist','07-31-1981','F','https://m.media-amazon.com/images/M/MV5BMTg1MDM4MTg1NV5BMl5BanBnXkFtZTcwMTExOTcwNw@@._V1_.jpg')  	  --8
+,('Alfie Allen','08-12-1989','F','https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Alfie_Allen_by_Gage_Skidmore_2.jpg/1200px-Alfie_Allen_by_Gage_Skidmore_2.jpg')     	--8
+,('Chad Stahelski','09-09-1975','M','https://medien.filmreporter.de/images/74320.jpg')  	  --8
+,('Derek Kolstad','09-09-1975','M','https://static.kino.de/wp-content/uploads/2011/08/Derek-Kolstad-GettyImages-1149384092-rct480x400u.jpg')  	 --8 
+,('Theo Rossi','09-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Theo_Rossi_by_Gage_Skidmore.jpg/640px-Theo_Rossi_by_Gage_Skidmore.jpg')        	  --1
+,('Michael Cassidy','09-09-1975','M','https://m.media-amazon.com/images/M/MV5BNTU2NTAzMTcwOF5BMl5BanBnXkFtZTgwNjc1MzkzNzE@._V1_.jpg') 	--1
+,('Zack Snyder','09-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Zack_Snyder_by_Gage_Skidmore_2.jpg/1200px-Zack_Snyder_by_Gage_Skidmore_2.jpg') 	--1
+,('Ben Affleck','09-09-1975','M','https://m.media-amazon.com/images/M/MV5BMzczNzNiMDAtMmUzZS00MTkwLWIwOTYtNmYyNjg3MTVkNThhXkEyXkFqcGdeQXVyMjA4MjI5MTA@._V1_UY1200_CR135,0,630,1200_AL_.jpg')  	 --4
+,('Neil Patric','10-19-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Neil_Patrick_Harris_at_BookCon_%2816341%29_%28cropped%29.jpg/1200px-Neil_Patrick_Harris_at_BookCon_%2816341%29_%28cropped%29.jpg')	  --4 
+,('David Fincher','09-15-1967','M','https://m.media-amazon.com/images/M/MV5BMTc1NDkwMTQ2MF5BMl5BanBnXkFtZTcwMzY0ODkyMg@@._V1_UY1200_CR76,0,630,1200_AL_.jpg')  	 --4
+,('Gillian Flynn','09-12-1975','M','https://upload.wikimedia.org/wikipedia/commons/a/a5/Gillian_Flynn_2014_%28cropped%29.jpg')	  --4 
+,('Dave Bautta','03-07-1988','M','https://upload.wikimedia.org/wikipedia/commons/4/40/Dave_Bautista_Photo_Op_GalaxyCon_Minneapolis_2019.jpg') 	 --3
+,('Ella Purnell','05-19-1995','M','https://upload.wikimedia.org/wikipedia/commons/b/b8/Ella_Purnell_Serpentine_Summer_Party_2017_%28cropped%29.png')  	 --3
+,('Omari Hardwick','09-14-1990','M','https://upload.wikimedia.org/wikipedia/commons/6/67/Omari_Hardwick_on_BTVR_%28cropped%29.jpg') 	 --3
+,('Garret Dillahunt','11-19-1991','M','https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Garret_Dillahunt_by_Gage_Skidmore.jpg/640px-Garret_Dillahunt_by_Gage_Skidmore.jpg') 	 --3 
+,('Sam Claflin','12-18-1975','M','https://upload.wikimedia.org/wikipedia/commons/8/82/Sam_Claflin_2014.jpg')  	 --3
+,('Emilia Clarke','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BNjg3OTg4MDczMl5BMl5BanBnXkFtZTgwODc0NzUwNjE@._V1_.jpg') 	  --5 7 
+,('Jenna Ortega','06-09-1975','M','https://de.web.img3.acsta.net/pictures/20/01/07/10/30/2919303.jpg')  	 --5
+,('Janet','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Janet_Montgomery_%2816434591754%29_%28cropped%29.jpg/800px-Janet_Montgomery_%2816434591754%29_%28cropped%29.jpg') 		--5
+,('Brendan Coyle','06-09-1975','M','https://pbs.twimg.com/profile_images/849701231576657920/VtwUJxxE_400x400.jpg') 	--5
+,('Jenna Coleman','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Jenna_Coleman_2016.jpg/640px-Jenna_Coleman_2016.jpg') 	--5
+,('Thea Sharrock','06-09-1975','M','https://www.cineuropa.org/imgCache/2021/08/04/1628069483455_0620x0435_27x0x727x510_1628069510673.jpg') 	--5
+,('JoJo Moyes','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Jojo_Moyes_2018_03.jpg/1200px-Jojo_Moyes_2018_03.jpg') 	--5
+,('Karoline Schuch','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BYzIzOGYzMjUtZjRlMS00NjI1LTk1YmYtZGM2MTk2YjJiNWNlXkEyXkFqcGdeQXVyMTAwMzUyMzUy._V1_.jpg') 	--6
+,('Peter Stattman','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BZTNhZWMyMTEtNTkzMy00NTU4LWFmZjktMmYzMTkwNzk4NDJiXkEyXkFqcGdeQXVyMjQwMDg0Ng@@._V1_UY1200_CR85,0,630,1200_AL_.jpg') 	--6
+,('Oliver Korittke','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/9/9d/Oliver_Korittke.jpg') 	--6
+,('Marc Rothermund','06-09-1975','M','https://profile-images.xing.com/images/16b2976819341488cbab30c7b7691191-2/marc-rothermund.1024x1024.jpg') 	--6
+,('Hans Rath','06-09-1975','M','https://www.ullstein-buchverlage.de/uploads/tx_publisher/urheberfoto/urheber5249.jpg')  	--6
+,('Patric Wilson','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Patrick_Wilson_MFF_2016.jpg/640px-Patrick_Wilson_MFF_2016.jpg')	  --9
+,('Lili taylor','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BMTAyNzAyMzA1ODZeQTJeQWpwZ15BbWU4MDAzNDQxNjkx._V1_UY1200_CR296,0,630,1200_AL_.jpg') 	--9
+,('Edgar Wright','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BMTMxMjgyMjQ4NF5BMl5BanBnXkFtZTcwMTU0ODk2Mw@@._V1_.jpg') 	--9
+,('Chad Hayes','06-09-1975','M','https://media.elcinema.com/uploads/_315x420_334131fe4ce98425963a4f571ecf4e5bb403289851564a09dba19ff075cfb6bc.jpg') 	--9
+,('Carey Hayes','06-09-1975','M','https://images.moviefit.me/p/o/197414-carey-hayes.jpg') 	--9
+,('James Wan','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/James_Wan.JPG/220px-James_Wan.JPG') 	--9
+,('Sandra Bullock','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Sandra_Bullock_in_July_2013.jpg/640px-Sandra_Bullock_in_July_2013.jpg')  	--10
+,('Vincent Onofrio','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Vincent_D%27Onofrio_TIFF_2014.jpg/800px-Vincent_D%27Onofrio_TIFF_2014.jpg') 	--10
+,('Viola davis','06-09-1975','M','https://m.media-amazon.com/images/M/MV5BNzUxNjM4ODI1OV5BMl5BanBnXkFtZTgwNTEwNDE2OTE@._V1_UY1200_CR174,0,630,1200_AL_.jpg') 	--10
+,('Nora Fingscheidt','06-09-1975','M','https://www.sueddeutsche.de/image/sz.1.4605972/430x645?v=1568806016') 	--10
+,('Peter Craig','06-09-1975','M','https://images.mubicdn.net/images/cast_member/135929/cache-268244-1508060263/image-w856.jpg?size=800x') 	--10 8 
+,('Hilary Seitz','06-09-1975','M','https://i1.rgstatic.net/ii/profile.image/278835342921729-1443490934412_Q512/Hilary-Seitz.jpg') 	--10
+,('Courtenay Miles','06-09-1975','M','https://images.mubicdn.net/images/cast_member/721067/cache-551123-1590811004/image-w856.jpg?size=800x') 	--10
+,('lee Jung','06-09-1975','M','https://i.mydramalist.com/4WrjK_5_c.jpg')                    --11
+,('Park Hae','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/20210923%E2%80%94Park_Hae-soo_%EB%B0%95%ED%95%B4%EC%88%98%2C_interview%2C_ELLE_Taiwan_screenshot_%2802m20s%29.jpg/1200px-20210923%E2%80%94Park_Hae-soo_%EB%B0%95%ED%95%B4%EC%88%98%2C_interview%2C_ELLE_Taiwan_screenshot_%2802m20s%29.jpg') 	                   --11
+,('Win haa','06-09-1975','M','https://i.mydramalist.com/pr8qE_5f.jpg')       	--11
+,('Hwang Dong','06-09-1975','M','https://upload.wikimedia.org/wikipedia/commons/f/f7/20140114_Hwang_Dong-hyuk.jpg') 	--11
+,('Joss Whedon','06-23-1964','M','https://i.guim.co.uk/img/media/8deb1774565fcb878c05ac1fd002a4860e409733/0_223_1963_1177/master/1963.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=f66082279a2d0d025f0d590efa8a8b83')
+,('Lily James','05-05-1989','F','https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Lilly_James_%2835036323024%29.jpg/1200px-Lilly_James_%2835036323024%29.jpg')
+,('Kevin Spacey','07-26-1959','M','https://upload.wikimedia.org/wikipedia/commons/1/1c/Kevin_Spacey%2C_May_2013.jpg')
+;
+end if;
+
+if (not exists(select * from films))
+then
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('The Dark Knight', '12-04-2021', 16, 'https://m.media-amazon.com/images/I/71Gqqky8sEL._SL1200_.jpg'); 
+   --action, thriller, history        --Cast:Christian Bale, Heath Ledger, Aaron Echart, Michael Caine, Gery Oldman, Sam Claflin . Director: Christopher Nolan,Vera Farmiga. Writer: Christopher Nolan, Jonathan Nolan 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Baby Driver', '03-23-2019', 16,'https://m.media-amazon.com/images/I/91H-aHzsPsL._SX425_.jpg');  
+  --comedies,                   --Cast: Ansel Elgort, Kevin Spacey, Lily James,  Edgar Wright,Charles Dance. Director: Edgar Wright. Writer: Edgar Wright. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Army of the Dead', '09-05-2020', 16,'https://m.media-amazon.com/images/M/MV5BNTcyMWNhNjMtMzZlZC00NTU5LTk2ODktZmRkYWJmYWY0YmQ1XkEyXkFqcGdeQXNuZXNodQ@@._V1_.jpg'); 
+    --crime, thriller, horror             --Cast: Dave Bautta, Aaron Echart,  Ella Purnell, Omari Hardwick, Garret Dillahunt, Theo Rossi, Michael Cassidy, Sam Claflin,Edgar Ramiez. Director: Zack Snyder. Writer: Zack Snyder, Shay Hatten, Joby Harold. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Gone Girl', '11-05-2014', 16,'https://m.media-amazon.com/images/I/91Q+5Djmk4L._SL1500_.jpg');      
+      --thriller     --Cast: Ben Affleck; Neil Patric,  Aaron Echart.      Director: David Fincher. Writer: Gillian Flynn
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Me before You', '06-12-2016', 12,'https://m.media-amazon.com/images/I/81inxJbBAIL._SL1500_.jpg');       
+      --romance    --Cast: Emilia Clarke, Sam Claflin, Janet McTeer, Charles Dance, Brendan Coyle, Jenna Coleman,Edgar Ramiez. Director: Thea Sharrock. Writer: JoJo Moyes. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Mann tut was Mann kann', '10-11-2012', 6,'https://m.media-amazon.com/images/I/61peTM211GL._SL1081_.jpg');             --german, comedies, entertainment     --Cast:  Jasmin Gerat, Karoline Schuch, Peter Stattman, oliver Korittke.   Director: Marc Rothermund   Writer: Hans Rath. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('YesDay', '09-08-2021', 0 ,'https://de.web.img3.acsta.net/pictures/21/02/12/09/57/0769536.jpg');                
+  --kids, comedy, familyMovies,    --Cast: Jennifer Garner, Edgar Ramiez, Jenna Ortega,Charles Dance,Emilia Clarke. Director: Miguel Arteta   Writer: Justin Malen, Vera Farmiga. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('JohnWick', '06-13-2014' , 16 ,'https://m.media-amazon.com/images/M/MV5BMDE0ZjMzOTAtMzU2OS00ZDVmLWFlMjYtMThlOWYwMDBiN2E3XkEyXkFqcGdeQWFsZWxvZw@@._V1_.jpg');         
+   --action, crime --Cast: Kenau Reeves, Michael Nyqvist, Alfie Allen ,Peter Craig ,Jasmin Gerat.     Director: Chad Stahelski, Edgar Wright , Writer: Derek Kolstad  
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('The Conjuring', '04-04-2013', 16 ,'https://m.media-amazon.com/images/M/MV5BMTM3NjA1NDMyMV5BMl5BanBnXkFtZTcwMDQzNDMzOQ@@._V1_.jpg');    
+        --horror --Cast: Vera Farmiga, Patric Wilson, Lili taylor, Edgar Wright,Jasmin Gerat.     Director:  James Wan  Writer:  Chad Hayes, Carey Hayes.  
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('The Unforgivable', '12-23-2021', 12,'https://de.web.img2.acsta.net/c_310_420/pictures/21/10/26/16/17/2610555.jpg');   
+            --crime, dramas --Cast: Sandra Bullock, Vincent Onofrio, Viola davis,     Director: Nora Fingscheidt   Writer: Peter Craig, Hilary Seitz, Courtenay Miles. 
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('Squid Game', '03-04-2021', 16 ,'https://m.media-amazon.com/images/M/MV5BYWE3MDVkN2EtNjQ5MS00ZDQ4LTliNzYtMjc2YWMzMDEwMTA3XkEyXkFqcGdeQXVyMTEzMTI1Mjk3._V1_.jpg');       
+          --thriller, crime, mysteries    --Cast: lee Jung, Park Hae, Win haa    Director: Hwang Dong     
+Insert into Films (title,releaseDate, minAgeOfAudience, filmPic) values ('The Avengers', '04-11-2012', 11,'https://m.media-amazon.com/images/M/MV5BNDYxNjQyMjAtNTdiOS00NGYwLWFmNTAtNThmYjU5ZGI2YTI1XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg');
+Insert into Films (title,releaseDate, minAgeOfAudience, parentId, filmPic) values ('Avengers: Age of Ultron', '04-13-2015', 11, 12,'https://m.media-amazon.com/images/M/MV5BMTM4OGJmNWMtOTM4Ni00NTE3LTg3MDItZmQxYjc4N2JhNmUxXkEyXkFqcGdeQXVyNTgzMDMzMTg@._V1_FMjpg_UX1000_.jpg');
+Insert into Films (title,releaseDate, minAgeOfAudience, parentId, filmPic) values ('Avengers: Infinity War', '04-23-2018', 11, 12,'https://m.media-amazon.com/images/I/81GfZasnt9L._SL1371_.jpg');
+Insert into Films (title,releaseDate, minAgeOfAudience, parentId, filmPic) values ('Avengers: Endgame', '04-22-2019', 11, 12,'https://lumiere-a.akamaihd.net/v1/images/p_avengersendgame_19751_e14a0104.jpeg?region=0%2C0%2C540%2C810');
+
+insert into filmrelatedpersons (filmid, filmroleid, filmpersonid) values
+(1, 1, 9)
+,(1, 1, 10)
+,(2, 1, 64)
+,(2, 1, 63)
+,(2, 1, 15)
+,(1, 1, 1)
+,(3, 1, 1)
+,(4, 1, 1)
+,(8, 1, 7)
+,(9, 1, 7)
+,(6, 1, 7)
+,(3, 1, 3)
+,(5, 1, 3)
+,(7, 1, 3)
+,(2, 1, 6)
+,(5, 1, 6)
+,(7, 1, 6)
+,(1, 1, 5)
+,(9, 1, 5)
+,(7, 1, 5)
+,(12, 9, 62)
+,(12, 10, 62)
+,(12, 2, 62)
+;
+
+insert into filmgenres (filmid, genreid) values (1, actionid)
+,(1, thriller)
+,(1, history)
+,(2, comedies)
+,(3,crime)
+,(3,thriller)
+,(3,horror)
+,(4,thriller)
+,(5,romance)
+,(6,german)
+,(6,comedies)
+,(6,entertainment)
+,(7,kids)
+,(7,comedies)
+,(7,familyMovies)
+,(8,actionid)
+,(8,crime)
+,(9,horror)
+,(10,crime)
+,(10,dramas)
+,(11,thriller)
+,(11,crime)
+,(11,mysteries)
+,(12,actionid);
+
+insert into filmuserratings (filmid, userid, rating) values
+(1,1,1),
+(3,1,2),
+(5,1,3),
+(7,1,4),
+(9,1,5),
+(2,2,3),
+(4,2,5),
+(6,2,4),
+(8,2,2),
+(10,2,4),
+(1,3,4),
+(2,3,4),
+(3,3,2),
+(4,3,1),
+(5,3,2),
+(1,4,2),
+(2,4,1),
+(3,4,1),
+(4,4,3),
+(5,4,4),
+(6,4,3),
+(7,4,4),
+(8,4,5),
+(9,4,5),
+(10,4,1),
+(11,4,2),
+(12,4,2),
+(13,4,4),
+(14,4,3),
+(15,4,3)
+;
+end if;
+
+end insert_block;
+$$;
+
+
+
