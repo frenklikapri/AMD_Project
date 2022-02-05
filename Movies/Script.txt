@@ -254,6 +254,9 @@ insert into films (title, releasedate, filmpic, parentid)
 values ($2, $3, $4, case when $5 > 0 then $5 else null end)
  returning filmId into addedId;
 else
+	if $5 > 0 and exists(select * from films f where f.parentId = id) then
+		raise exception 'This film has children and you can not edit the parent';
+	end if;
 update films set title = $2, releaseDate = $3, filmpic = $4,
 parentId = case when $5 > 0 then $5 else null end
 where filmId = id;
@@ -464,6 +467,34 @@ return '';
 end;
 $$ language plpgsql;
 
+create or replace function checkSelfOrCycleReference(filmId int, parentId int = null) returns boolean
+as
+$$
+begin
+ if filmid = parentId or exists(select * from films f where 
+							   f.parentId = $1 and f.filmId = $2) then
+ 	return false;
+ else
+ 	return true; 
+end if;
+end;
+$$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION deletePersonFilms() RETURNS trigger AS
+$$
+BEGIN
+	delete from films where filmid in 
+		(select frp.filmid from filmrelatedpersons frp where frp.filmpersonid = OLD.filmpersonid);
+   RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER deleteFilmsOfPerson
+   BEFORE DELETE ON filmpersons FOR EACH ROW
+   EXECUTE PROCEDURE deletePersonFilms();
+
+alter table films add constraint checkReferences 
+	check(checkSelfOrCycleReference(filmid, parentid));
 
 do $$ 
 <<insert_block>>

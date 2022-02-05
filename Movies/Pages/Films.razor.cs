@@ -81,7 +81,7 @@ namespace Movies.Pages
         List<FilmDto> GetParentFilms()
         {
             var films = _films
-                .Where(f => f.ParentId == null && f.Id != _filmToSave.Id)
+                //.Where(f => f.ParentId == null && f.Id != _filmToSave.Id)
                 .ToList();
             return films;
         }

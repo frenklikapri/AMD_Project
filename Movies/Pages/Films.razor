@@ -111,7 +111,7 @@
                         <ValidationMessage For="() => _filmToSave.ReleaseDate" />
                     </div>
                     <div class="mb-3">
-                        <label for="parentId">Genres</label>
+                        <label for="genres">Genres</label>
                         <select class="form-control" @onchange="GenresChanged" multiple="multiple"
                                 id="genres" ref="sel">
                             @foreach (var genre in _allGenres)
